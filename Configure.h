@@ -31,6 +31,7 @@ using namespace cv;
 
 
 #include <Eigen/SVD>
+#include <Eigen/Geometry>
 #include <Eigen/IterativeLinearSolvers>
 #include <Eigen/Sparse>
 #include <unsupported/Eigen/SparseExtra> 

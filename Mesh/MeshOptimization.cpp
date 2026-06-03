@@ -480,8 +480,12 @@ int MeshOptimization::getContentPreservingTermEquationCount() const {
 	{
 		for (int j = 0; j < content_interpolation[i].size(); j++)//lines
 		{
-			//For each line, except for always two points, the other sampling points need to be constrained, so minus two;  
-			result += content_interpolation[i][j].size() - 2;
+			// For each line, the first two points define the line and the
+			// remaining points are constrained. Short SAM contours can shrink
+			// below three points after boundary filtering.
+			if (content_interpolation[i][j].size() > 2) {
+				result += (int)content_interpolation[i][j].size() - 2;
+			}
 		}
 	}
 	//The constraint is x is a bunch of equations,y is a bunch of equations

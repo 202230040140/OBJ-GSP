@@ -1,6 +1,6 @@
 ﻿#pragma once
 #include "../Configure.h"
-#include <imgproc/types_c.h>
+#include <opencv2/imgproc/types_c.h>
 #include "../Feature/ImageData.h"
 
 

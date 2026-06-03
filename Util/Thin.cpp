@@ -2,7 +2,7 @@
 /// Skeletonization code 
 ///
 
-#include "Thin.h";
+#include "Thin.h"
 
 
 Mat g_srcImage, g_dstImage, g_midImage, g_grayImage, imgHSVMask;//原始图、中间图和效果图

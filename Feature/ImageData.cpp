@@ -4,6 +4,7 @@
 #include <atomic>
 #include <opencv2/opencv.hpp>
 #include <thread>
+#include "../Util/RuntimeConfig.h"
 
 #define STRIP_FLAG_HELP 1
 #include <gflags/gflags.h>
@@ -48,7 +49,8 @@ ImageData::ImageData(const string& _file_dir,
 	const string& _file_full_name,
 	LINES_FILTER_FUNC* _width_filter,
 	LINES_FILTER_FUNC* _length_filter,
-	const string* _debug_dir) {
+	const string* _debug_dir,
+	const string* _sam_dir) {
 
 	file_dir = &_file_dir;
 	std::size_t found = _file_full_name.find_last_of(".");
@@ -56,6 +58,7 @@ ImageData::ImageData(const string& _file_dir,
 	file_name = _file_full_name.substr(0, found);
 	file_extension = _file_full_name.substr(found);
 	debug_dir = _debug_dir;
+	sam_dir = _sam_dir;
 
 	grey_img = Mat();
 
@@ -164,7 +167,13 @@ const vector<vector<Point>> ImageData::getContentSamplesPoint(vector<double>& we
 	cv::Mat sam_im;
 
 	imgRes = img.clone();
-	imwrite("0-original.png", imgRes);
+	if (sam_dir != NULL && !sam_dir->empty()) {
+		ensureDirectory(*sam_dir);
+		imwrite(joinPath(*sam_dir, file_name + "-original-runtime.png"), imgRes);
+	}
+	else {
+		imwrite("0-original.png", imgRes);
+	}
 
 	
 
@@ -255,10 +264,14 @@ const vector<vector<Point>> ImageData::getContentSamplesPoint(vector<double>& we
 	if (python_sam)
 	{
 		int margin = 0; 
-		std::ifstream file("contour_coords.txt");
+		string contour_file_name = "contour_coords.txt";
+		if (sam_dir != NULL && !sam_dir->empty()) {
+			contour_file_name = joinPath(*sam_dir, contour_file_name);
+		}
+		std::ifstream file(contour_file_name);
 		if (!file.is_open()) {
 			std::cerr << "Failed to open file." << std::endl;
-			cout << "fail to open contour_coords.txt" << endl;
+			cout << "fail to open " << contour_file_name << endl;
 		}
 
 		std::vector<std::vector<Point>> contour_coords_vectors;

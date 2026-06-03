@@ -43,12 +43,13 @@ class ImageData {
 public:
 	string file_name, file_extension;
 	pair<double, double> LatALon; //图像经纬度 （纬度，经度）
-	const string* file_dir, * debug_dir;
+	const string* file_dir, * debug_dir, * sam_dir;
 	ImageData(const string& _file_dir,
 		const string& _file_full_name,
 		LINES_FILTER_FUNC* _width_filter,
 		LINES_FILTER_FUNC* _length_filter,
-		const string* _debug_dir = NULL);
+		const string* _debug_dir = NULL,
+		const string* _sam_dir = NULL);
 
 	const Mat& getGreyImage() const;
 	const vector<LineData>& getLines() const;

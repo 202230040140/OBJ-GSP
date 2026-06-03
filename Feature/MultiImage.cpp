@@ -12,12 +12,15 @@ MultiImages::MultiImages(const string& _file_name,
 			parameter.image_file_full_names[i],
 			_width_filter,
 			_length_filter,
-			&parameter.debug_dir);
+			&parameter.debug_dir,
+			&parameter.sam_dir);
 #else
 		images_data.emplace_back(parameter.file_dir,
 			parameter.image_file_full_names[i],
 			_width_filter,
-			_length_filter);
+			_length_filter,
+			NULL,
+			&parameter.sam_dir);
 #endif
 	}
 }
@@ -1655,6 +1658,10 @@ const vector<vector<pair<double, double>>> MultiImages::calcTriangleUV(const vec
 		vector<pair<double, double>> item_uvs;
 
 		vector<Point> item = samples[i];
+		if (item.size() <= 2) {
+			uvs.push_back(item_uvs);
+			continue;
+		}
 		Point2 start = item[0], end = item[1];
 		item_uvs.reserve(item.size() - 2);
 

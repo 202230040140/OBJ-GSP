@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+Debug/
+Release/
+out/
+CMakeFiles/
+CMakeCache.txt
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+.venv-*/
+
+# Generated experiment outputs
+experiments/
+input-data/0_results/
+input-data/1_debugs/
+0-original.png
+contour_coords.txt
+images/
+*.out.log
+*.err.log
+reproduce-*.log
+
+# Large local model/data artifacts
+sam_vit_*.pth
+sam_ckpt/
+
+# Local paper copy used during reproduction notes
+Object-level Geometric Structure Preserving for Natural Image Stitching.pdf
+StitchBench General 上复现 OBJ-GSP Ours 实验计划.md

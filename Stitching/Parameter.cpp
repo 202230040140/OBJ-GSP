@@ -7,6 +7,18 @@
 //
 
 #include "Parameter.h"
+#include "../Util/RuntimeConfig.h"
+
+#include <cctype>
+
+namespace {
+string toLowerCopy(string value) {
+	transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+		return (char)tolower(ch);
+	});
+	return value;
+}
+}
 
 vector<string> getImageFileFullNamesInDir(const string& dir_name) {
 	DIR* dir;
@@ -15,9 +27,9 @@ vector<string> getImageFileFullNamesInDir(const string& dir_name) {
 
 	const vector<string> image_formats = {
 		".bmp", ".dib",
-		".jpeg", ".jpg", ".jpe", ".JPG",
+		".jpeg", ".jpg", ".jpe",
 		".jp2",
-		".png", ".PNG"
+		".png",
 		".pbm", ".pgm", ".ppm",
 		".sr", ".ras",
 		".tiff", ".tif" };
@@ -25,9 +37,10 @@ vector<string> getImageFileFullNamesInDir(const string& dir_name) {
 	if ((dir = opendir(dir_name.c_str())) != NULL) {
 		while ((ent = readdir(dir)) != NULL) {
 			string file = string(ent->d_name);
+			string lower_file = toLowerCopy(file);
 			for (int i = 0; i < image_formats.size(); ++i) {
-				if (file.length() > image_formats[i].length() &&
-					image_formats[i].compare(file.substr(file.length() - image_formats[i].length(),
+				if (lower_file.length() > image_formats[i].length() &&
+					image_formats[i].compare(lower_file.substr(lower_file.length() - image_formats[i].length(),
 						image_formats[i].length())) == 0) {
 					result.emplace_back(file);
 				}
@@ -38,6 +51,7 @@ vector<string> getImageFileFullNamesInDir(const string& dir_name) {
 	else {
 		printError("F(getImageFileFullNamesInDir) could not open directory");
 	}
+	sort(result.begin(), result.end());
 	return result;
 }
 
@@ -50,19 +64,30 @@ bool isFileExist(const string& name) {
 Parameter::Parameter(const string& _file_name) {
 
 	file_name = _file_name;
-	file_dir = "./input-data/" + _file_name + "/";
-	result_dir = "./input-data/0_results/" + _file_name + "-result/";
+	file_dir = joinPath(g_runtime_config.data_root, _file_name) + "/";
+	if (g_runtime_config.sam_root.empty()) {
+		sam_dir = "";
+	}
+	else {
+		sam_dir = joinPath(g_runtime_config.sam_root, _file_name);
+	}
+	result_dir = joinPath(joinPath(g_runtime_config.output_root, "0_results"), _file_name + "-result") + "/";
 
-	_mkdir("./input-data/0_results/");
-	_mkdir(result_dir.c_str());
+	ensureDirectory(joinPath(g_runtime_config.output_root, "0_results"));
+	ensureDirectory(result_dir);
 #ifndef DP_NO_LOG
-	debug_dir = "./input-data/1_debugs/" + _file_name + "-result/";
-	_mkdir("./input-data/1_debugs/");
-	_mkdir(debug_dir.c_str());
+	debug_dir = joinPath(joinPath(g_runtime_config.output_root, "1_debugs"), _file_name + "-result") + "/";
+	ensureDirectory(joinPath(g_runtime_config.output_root, "1_debugs"));
+	ensureDirectory(debug_dir);
 #endif
 
 	//stitching_parse_file_name = file_dir + _file_name + "-STITCH-GRAPH.txt";
-	stitching_parse_file_name = file_dir + _file_name + TXT_NAME;
+	if (g_runtime_config.graph_root.empty()) {
+		stitching_parse_file_name = file_dir + _file_name + TXT_NAME;
+	}
+	else {
+		stitching_parse_file_name = joinPath(joinPath(g_runtime_config.graph_root, _file_name), _file_name + TXT_NAME);
+	}
 
 	image_file_full_names = getImageFileFullNamesInDir(file_dir);
 
