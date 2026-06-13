@@ -43,15 +43,20 @@ class ImageData {
 public:
 	string file_name, file_extension;
 	pair<double, double> LatALon; //图像经纬度 （纬度，经度）
-	const string* file_dir, * debug_dir, * sam_dir;
+	const string* file_dir, * debug_dir, * sam_dir, * depth_dir;
 	ImageData(const string& _file_dir,
 		const string& _file_full_name,
 		LINES_FILTER_FUNC* _width_filter,
 		LINES_FILTER_FUNC* _length_filter,
 		const string* _debug_dir = NULL,
-		const string* _sam_dir = NULL);
+		const string* _sam_dir = NULL,
+		const string* _depth_dir = NULL);
 
 	const Mat& getGreyImage() const;
+	bool hasDepthMap() const;
+	double getDepthValue(const Point2& point) const;
+	int getDepthLayer(const Point2& point) const;
+	double getDepthConfidence(const Point2& point) const;
 	const vector<LineData>& getLines() const;
 	const vector<Point2>& getFeaturePoints() const;
 	const vector<FeatureDescriptor>& getFeatureDescriptors() const;
@@ -67,9 +72,14 @@ private:
 	LINES_FILTER_FUNC* width_filter, * length_filter;
 
 	mutable Mat grey_img;
+	mutable bool depth_loaded;
+	mutable Mat depth_map;
+	mutable Mat depth_layer_map;
+	mutable Mat depth_confidence_map;
 	mutable vector<LineData> img_lines;
 	mutable vector<Point2> feature_points;
 	mutable vector<FeatureDescriptor> feature_descriptors;
+	void loadDepthAssets() const;
 	vector<Vec4f> findLine(Mat& gray) const;
 };
 

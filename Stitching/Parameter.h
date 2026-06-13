@@ -20,7 +20,7 @@ class Parameter {
 public:
 	Parameter(const string& _file_name);
 
-	string file_name, file_dir, sam_dir;
+	string file_name, file_dir, sam_dir, depth_dir;
 	string stitching_parse_file_name;
 
 	string result_dir, debug_dir;

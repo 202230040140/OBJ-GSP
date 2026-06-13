@@ -7,6 +7,10 @@
 //
 
 #include "MeshOptimization.h"
+#include "../Util/RuntimeConfig.h"
+
+#include <cmath>
+#include <stdexcept>
 
 MeshOptimization::MeshOptimization(const MultiImages& _multi_images) {
 	multi_images = &_multi_images;
@@ -15,11 +19,13 @@ MeshOptimization::MeshOptimization(const MultiImages& _multi_images) {
 	alignment_weight = 0;
 	local_similarity_weight = 0;
 	global_similarity_weight_beta = global_similarity_weight_gamma = 0;
+	content_preserving_weight = 0;
 	global_rotation_method = GLOBAL_ROTATION_METHODS_SIZE;
 
 	alignment_equation = make_pair(0, 0);
 	local_similarity_equation = make_pair(0, 0);
 	global_similarity_equation = make_pair(0, 0);
+	content_preserving_equation = make_pair(0, 0);
 }
 
 void MeshOptimization::setWeightToAlignmentTerm(const double _weight) {
@@ -300,6 +306,11 @@ void MeshOptimization::prepareSimilarityTerm(vector<Triplet<double> >& _triplets
 
 void MeshOptimization::prepareContentPreservingTerm(vector<Triplet<double> >& _triplets,
 	vector<pair<int, double> >& _b_vector) const {
+	if (isDepthMethod()) {
+		prepareDepthPreservingTerm(_triplets, _b_vector);
+		return;
+	}
+
 	if (content_preserving_equation.second) {
 		//Linear sampling point coordinates are converted to grid interpolation format.
 		const vector<vector<vector<InterpolateVertex> > >& content_interpolation = multi_images->getSamplesInterpolation();
@@ -407,6 +418,55 @@ void MeshOptimization::prepareContentPreservingTerm(vector<Triplet<double> >& _t
 	}
 }
 
+void MeshOptimization::prepareDepthPreservingTerm(vector<Triplet<double> >& _triplets,
+	vector<pair<int, double> >& _b_vector) const {
+	if (!content_preserving_equation.second) {
+		return;
+	}
+
+	const vector<int>& images_vertices_start_index = multi_images->getImagesVerticesStartIndex();
+	int eq_count = 0;
+	const double tau = std::max(1e-6, g_runtime_config.depth_tau);
+
+	for (int i = 0; i < multi_images->images_data.size(); ++i) {
+		const ImageData& image_data = multi_images->images_data[i];
+		const vector<Edge>& edges = image_data.mesh_2d->getEdges();
+		const vector<Point2>& vertices = image_data.mesh_2d->getVertices();
+		const int vertex_start = images_vertices_start_index[i];
+
+		for (int j = 0; j < edges.size(); ++j) {
+			const int ind_e1 = edges[j].indices[0];
+			const int ind_e2 = edges[j].indices[1];
+			const Point2& src = vertices[ind_e1];
+			const Point2& dst = vertices[ind_e2];
+
+			const double d1 = image_data.getDepthValue(src);
+			const double d2 = image_data.getDepthValue(dst);
+			const int layer1 = image_data.getDepthLayer(src);
+			const int layer2 = image_data.getDepthLayer(dst);
+			const double continuity = std::exp(-std::abs(d1 - d2) / tau);
+			const double layer_weight = (layer1 == layer2) ? 1.0 : g_runtime_config.depth_cross_layer_weight;
+			const double c1 = image_data.getDepthConfidence(src);
+			const double c2 = image_data.getDepthConfidence(dst);
+			const double confidence = std::max(g_runtime_config.depth_confidence_floor, (c1 + c2) * 0.5);
+			const double depth_weight = std::max(g_runtime_config.depth_min_weight, layer_weight * continuity * confidence);
+			const double weight = content_preserving_weight * depth_weight;
+			const Point2 delta = dst - src;
+
+			for (int dim = 0; dim < DIMENSION_2D; ++dim) {
+				const int equation = content_preserving_equation.first + eq_count + dim;
+				_triplets.emplace_back(equation, vertex_start + DIMENSION_2D * ind_e2 + dim, weight);
+				_triplets.emplace_back(equation, vertex_start + DIMENSION_2D * ind_e1 + dim, -weight);
+				_b_vector.emplace_back(equation, weight * (dim == 0 ? delta.x : delta.y));
+			}
+			eq_count += DIMENSION_2D;
+		}
+	}
+
+	cout << "Depth structure edge equations: " << eq_count << endl;
+	assert(eq_count == content_preserving_equation.second);
+}
+
 
 
 int MeshOptimization::getAlignmentTermEquationsCount() const {
@@ -473,6 +533,9 @@ int MeshOptimization::getEdgeNeighborVerticesCount() const {
 /// </summary>
 /// <returns></returns>
 int MeshOptimization::getContentPreservingTermEquationCount() const {
+	if (isDepthMethod()) {
+		return getDepthPreservingTermEquationCount();
+	}
 	int result = 0;
 	//Get grid vertex interpolation data type data of all sampling points.
 	const vector<vector<vector<InterpolateVertex> > >& content_interpolation = multi_images->getSamplesInterpolation();
@@ -492,17 +555,18 @@ int MeshOptimization::getContentPreservingTermEquationCount() const {
 	return result * DIMENSION_2D;
 }
 
+int MeshOptimization::getDepthPreservingTermEquationCount() const {
+	return getEdgesCount() * DIMENSION_2D;
+}
+
 
 vector<vector<Point2> > MeshOptimization::getImageVerticesBySolving(vector<Triplet<double> >& _triplets,
 	const vector<pair<int, double> >& _b_vector) const {
 
-	int equations;
-	if (RUN_TYPE != 0) {
-		equations = content_preserving_equation.first + content_preserving_equation.second;
-	}
-	else {
-		equations = global_similarity_equation.first + global_similarity_equation.second;
-	}
+	int equations = global_similarity_equation.first + global_similarity_equation.second;
+	equations = std::max(equations, content_preserving_equation.first + content_preserving_equation.second);
+	equations = std::max(equations, local_similarity_equation.first + local_similarity_equation.second);
+	equations = std::max(equations, alignment_equation.first + alignment_equation.second);
 
 	LeastSquaresConjugateGradient<SparseMatrix<double>> lscg;
 	SparseMatrix<double> A(equations, getVerticesCount());
@@ -523,6 +587,9 @@ vector<vector<Point2> > MeshOptimization::getImageVerticesBySolving(vector<Tripl
 #endif
 	lscg.compute(A);
 	x = lscg.solve(b);
+	if (lscg.info() != Eigen::Success) {
+		throw std::runtime_error("Sparse solver failed to converge.");
+	}
 #ifndef DP_NO_LOG
 	timer.end("Solve Ax = b");
 	cout << "#Iterations:     " << lscg.iterations() << endl;
@@ -535,6 +602,9 @@ vector<vector<Point2> > MeshOptimization::getImageVerticesBySolving(vector<Tripl
 		int count = (int)multi_images->images_data[i].mesh_2d->getVertices().size() * DIMENSION_2D;
 		vertices[i].reserve(count);
 		for (int j = 0; j < count; j += DIMENSION_2D) {
+			if (!std::isfinite(x[x_index + j]) || !std::isfinite(x[x_index + j + 1])) {
+				throw std::runtime_error("Sparse solver produced non-finite mesh vertices.");
+			}
 			vertices[i].emplace_back(x[x_index + j],
 				x[x_index + j + 1]);
 		}

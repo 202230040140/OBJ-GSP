@@ -49,7 +49,15 @@ void printUsage() {
 		<< "  --data-root PATH       Root containing dataset folders\n"
 		<< "  --graph-root PATH      Root containing generated graph folders\n"
 		<< "  --sam-root PATH        Root containing SAM asset folders\n"
+		<< "  --depth-root PATH      Root containing depth asset folders\n"
 		<< "  --output-root PATH     Root for 0_results and 1_debugs\n"
+		<< "  --method NAME          gsp, obj-gsp, ges-gsp, or depth-gsp\n"
+		<< "  --content-weight VALUE Content/depth structure term weight\n"
+		<< "  --depth-tau VALUE      Depth continuity temperature for depth-gsp\n"
+		<< "  --depth-cross-layer-weight VALUE  Weight for edges crossing depth layers\n"
+		<< "  --depth-min-weight VALUE  Minimum depth edge weight\n"
+		<< "  --depth-confidence-floor VALUE  Confidence floor in [0,1]\n"
+		<< "  --max-target-megapixels VALUE  Abort if output canvas exceeds this size\n"
 		<< "  --datasets-file PATH   Text file with one dataset name per line\n"
 		<< "  --dataset NAME         Add one dataset name\n";
 }
@@ -74,8 +82,32 @@ int main(int argc, const char* argv[]) {
 			else if (arg.rfind("--sam-root", 0) == 0) {
 				g_runtime_config.sam_root = normalizePath(getArgValue(i, argc, argv, arg));
 			}
+			else if (arg.rfind("--depth-root", 0) == 0) {
+				g_runtime_config.depth_root = normalizePath(getArgValue(i, argc, argv, arg));
+			}
 			else if (arg.rfind("--output-root", 0) == 0) {
 				g_runtime_config.output_root = normalizePath(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--method", 0) == 0) {
+				g_runtime_config.method = normalizeMethod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--content-weight", 0) == 0) {
+				g_runtime_config.content_preserving_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-tau", 0) == 0) {
+				g_runtime_config.depth_tau = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-cross-layer-weight", 0) == 0) {
+				g_runtime_config.depth_cross_layer_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-min-weight", 0) == 0) {
+				g_runtime_config.depth_min_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-confidence-floor", 0) == 0) {
+				g_runtime_config.depth_confidence_floor = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--max-target-megapixels", 0) == 0) {
+				g_runtime_config.max_target_megapixels = stod(getArgValue(i, argc, argv, arg));
 			}
 			else if (arg.rfind("--datasets-file", 0) == 0) {
 				vector<string> file_datasets = readDatasetsFile(getArgValue(i, argc, argv, arg));
@@ -101,6 +133,27 @@ int main(int argc, const char* argv[]) {
 	if (data_list.empty()) {
 		data_list.emplace_back("AANAP-01_skyline");
 	}
+	if (!isKnownMethod()) {
+		cerr << "Unknown method: " << g_runtime_config.method << endl;
+		printUsage();
+		return 2;
+	}
+	if (g_runtime_config.depth_tau <= 0) {
+		cerr << "--depth-tau must be positive." << endl;
+		return 2;
+	}
+	if (g_runtime_config.content_preserving_weight < 0 ||
+		g_runtime_config.depth_cross_layer_weight < 0 ||
+		g_runtime_config.depth_min_weight < 0 ||
+		g_runtime_config.depth_confidence_floor < 0 ||
+		g_runtime_config.depth_confidence_floor > 1) {
+		cerr << "Depth/content weights must be non-negative, and --depth-confidence-floor must be in [0,1]." << endl;
+		return 2;
+	}
+	if (g_runtime_config.max_target_megapixels <= 0) {
+		cerr << "--max-target-megapixels must be positive." << endl;
+		return 2;
+	}
 
 	Eigen::initParallel();
 	CV_DNN_REGISTER_LAYER_CLASS(Crop, CropLayer);
@@ -109,7 +162,16 @@ int main(int argc, const char* argv[]) {
 	cout << "data_root = " << g_runtime_config.data_root << endl;
 	cout << "graph_root = " << g_runtime_config.graph_root << endl;
 	cout << "sam_root = " << g_runtime_config.sam_root << endl;
+	cout << "depth_root = " << g_runtime_config.depth_root << endl;
 	cout << "output_root = " << g_runtime_config.output_root << endl;
+	cout << "method = " << g_runtime_config.method << endl;
+	cout << "result_suffix = " << resultSuffix() << endl;
+	cout << "content_weight = " << g_runtime_config.content_preserving_weight << endl;
+	cout << "depth_tau = " << g_runtime_config.depth_tau << endl;
+	cout << "depth_cross_layer_weight = " << g_runtime_config.depth_cross_layer_weight << endl;
+	cout << "depth_min_weight = " << g_runtime_config.depth_min_weight << endl;
+	cout << "depth_confidence_floor = " << g_runtime_config.depth_confidence_floor << endl;
+	cout << "max_target_megapixels = " << g_runtime_config.max_target_megapixels << endl;
 
 	time_t start = clock();
 	TimeCalculator timer;
@@ -121,10 +183,10 @@ int main(int argc, const char* argv[]) {
 		niswgsp.setWeightToAlignmentTerm(1); 
 		niswgsp.setWeightToLocalSimilarityTerm(0.75); 
 		niswgsp.setWeightToGlobalSimilarityTerm(6, 20, GLOBAL_ROTATION_2D_METHOD);
-		niswgsp.setWeightToContentPreservingTerm(1.5);
+		niswgsp.setWeightToContentPreservingTerm(g_runtime_config.content_preserving_weight);
 		Mat blend_linear;
 		vector<vector<Point2> > original_vertices;
-		if (RUN_TYPE != 0) {
+		if (usesContentPreservingTerm()) {
 			blend_linear = niswgsp.solve_content(BLEND_LINEAR, original_vertices);
 		}
 		else {

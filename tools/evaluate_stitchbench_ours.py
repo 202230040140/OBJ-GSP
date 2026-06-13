@@ -102,17 +102,31 @@ def format_float(value: float) -> str:
     return "" if not math.isfinite(value) else f"{value:.5f}"
 
 
+def suffix_for_method(method: str) -> str:
+    method = method.lower()
+    if method in {"depth", "depth-only", "depth-gsp"}:
+        return "Depth-GSP_"
+    if method == "gsp":
+        return "GSP_"
+    if method == "ges-gsp":
+        return "GES-GSP_"
+    return "Ours-SAM_"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate OBJ-GSP StitchBench General results.")
     parser.add_argument("--experiment-root", default="experiments/stitchbench_general_ours")
     parser.add_argument("--datasets-file")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--skip-niqe", action="store_true")
+    parser.add_argument("--method", default="obj-gsp")
+    parser.add_argument("--result-suffix")
     args = parser.parse_args()
 
     experiment_root = Path(args.experiment_root)
     datasets_file = Path(args.datasets_file) if args.datasets_file else experiment_root / "datasets.txt"
     datasets = read_datasets(datasets_file)
+    result_suffix = args.result_suffix or suffix_for_method(args.method)
 
     metric = None
     if not args.skip_niqe:
@@ -121,7 +135,7 @@ def main() -> int:
     per_pair_rows = []
     for dataset in datasets:
         category = category_for(dataset) or ""
-        result_path = experiment_root / "0_results" / f"{dataset}-result" / f"{dataset}-Ours-SAM_.png"
+        result_path = experiment_root / "0_results" / f"{dataset}-result" / f"{dataset}-{result_suffix}.png"
         debug_dir = experiment_root / "1_debugs" / f"{dataset}-result"
         rmse_path = debug_dir / f"{dataset}-RMSE-[DPS].txt"
         residual_path = debug_dir / f"{dataset}-W_Residual-[DPS].txt"
@@ -204,7 +218,9 @@ def main() -> int:
     write_csv(experiment_root / "paper_comparison.csv", comparison_rows)
 
     report_lines = [
-        "# OBJ-GSP Ours StitchBench General Report",
+        f"# {args.method} StitchBench General Report",
+        "",
+        f"Result suffix: `{result_suffix}`",
         "",
         "| Category | Valid/Total | Paper MDR | Ours MDR | MDR Status | Paper NIQE | Ours NIQE | NIQE Status | Overall |",
         "|---|---:|---:|---:|---|---:|---:|---|---|",
@@ -227,7 +243,7 @@ def main() -> int:
     report_lines.extend(
         [
             "",
-            "MDR is read from the C++ RMSE output. NIQE is computed on `*-Ours-SAM_.png` with pyiqa.",
+            f"MDR is read from the C++ RMSE output. NIQE is computed on `*-{result_suffix}.png` with pyiqa.",
             "Automatic graph files are generated from sorted image order, so this is a loose reproduction check rather than an official-number reproduction.",
         ]
     )

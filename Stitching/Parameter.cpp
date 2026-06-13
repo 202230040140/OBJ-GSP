@@ -71,6 +71,12 @@ Parameter::Parameter(const string& _file_name) {
 	else {
 		sam_dir = joinPath(g_runtime_config.sam_root, _file_name);
 	}
+	if (g_runtime_config.depth_root.empty()) {
+		depth_dir = "";
+	}
+	else {
+		depth_dir = joinPath(g_runtime_config.depth_root, _file_name);
+	}
 	result_dir = joinPath(joinPath(g_runtime_config.output_root, "0_results"), _file_name + "-result") + "/";
 
 	ensureDirectory(joinPath(g_runtime_config.output_root, "0_results"));

@@ -1,6 +1,7 @@
 ﻿
 
 #include "MultiImages.h"
+#include "../Util/RuntimeConfig.h"
 
 MultiImages::MultiImages(const string& _file_name,
 	LINES_FILTER_FUNC* _width_filter,
@@ -13,14 +14,16 @@ MultiImages::MultiImages(const string& _file_name,
 			_width_filter,
 			_length_filter,
 			&parameter.debug_dir,
-			&parameter.sam_dir);
+			&parameter.sam_dir,
+			&parameter.depth_dir);
 #else
 		images_data.emplace_back(parameter.file_dir,
 			parameter.image_file_full_names[i],
 			_width_filter,
 			_length_filter,
 			NULL,
-			&parameter.sam_dir);
+			&parameter.sam_dir,
+			&parameter.depth_dir);
 #endif
 	}
 }
@@ -1257,16 +1260,7 @@ Mat MultiImages::textureMapping(const vector<vector<Point2> >& _vertices,
 		if (_blend_method != BLEND_AVERAGE) {
 			new_weight_mask.emplace_back(w_mask);
 		}
-		if (RUN_TYPE == 0) {
-			imwrite(parameter.debug_dir + parameter.file_name + images_data[i].file_name + "_[GSP]_item_wraping.png", image);
-		}
-		else if (RUN_TYPE==1)
-		{
-			imwrite(parameter.debug_dir + parameter.file_name + images_data[i].file_name + "_[GES-GSP]_item_wraping.png", image);
-		}
-		else {
-			imwrite(parameter.debug_dir + parameter.file_name + images_data[i].file_name + "_[Ours-SAM]_item_wraping.png", image);
-		}
+		imwrite(parameter.debug_dir + parameter.file_name + images_data[i].file_name + "_[" + resultSuffix() + "]_item_wraping.png", image);
 
 	}
 

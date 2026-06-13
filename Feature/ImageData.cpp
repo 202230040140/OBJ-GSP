@@ -1,7 +1,10 @@
 ﻿
 #include "ImageData.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
+#include <limits>
 #include <opencv2/opencv.hpp>
 #include <thread>
 #include "../Util/RuntimeConfig.h"
@@ -50,7 +53,8 @@ ImageData::ImageData(const string& _file_dir,
 	LINES_FILTER_FUNC* _width_filter,
 	LINES_FILTER_FUNC* _length_filter,
 	const string* _debug_dir,
-	const string* _sam_dir) {
+	const string* _sam_dir,
+	const string* _depth_dir) {
 
 	file_dir = &_file_dir;
 	std::size_t found = _file_full_name.find_last_of(".");
@@ -59,8 +63,10 @@ ImageData::ImageData(const string& _file_dir,
 	file_extension = _file_full_name.substr(found);
 	debug_dir = _debug_dir;
 	sam_dir = _sam_dir;
+	depth_dir = _depth_dir;
 
 	grey_img = Mat();
+	depth_loaded = false;
 
 	width_filter = _width_filter;
 	length_filter = _length_filter;
@@ -95,6 +101,111 @@ const Mat& ImageData::getGreyImage() const {
 		cvtColor(img, grey_img, CV_BGR2GRAY);
 	}
 	return grey_img;
+}
+
+void ImageData::loadDepthAssets() const {
+	if (depth_loaded) {
+		return;
+	}
+	depth_loaded = true;
+
+	if (depth_dir == NULL || depth_dir->empty()) {
+		depth_map = Mat(img.size(), CV_32FC1, Scalar(0.5));
+		depth_layer_map = Mat(img.size(), CV_8UC1, Scalar(0));
+		depth_confidence_map = Mat(img.size(), CV_8UC1, Scalar(255));
+		return;
+	}
+
+	const string depth_path = joinPath(*depth_dir, file_name + "-depth.png");
+	Mat raw_depth = imread(depth_path, IMREAD_UNCHANGED);
+	if (raw_depth.empty()) {
+		cerr << "Depth asset missing, using neutral depth: " << depth_path << endl;
+		depth_map = Mat(img.size(), CV_32FC1, Scalar(0.5));
+		depth_layer_map = Mat(img.size(), CV_8UC1, Scalar(0));
+		depth_confidence_map = Mat(img.size(), CV_8UC1, Scalar(255));
+		return;
+	}
+
+	if (raw_depth.channels() > 1) {
+		cvtColor(raw_depth, raw_depth, COLOR_BGR2GRAY);
+	}
+	if (raw_depth.depth() == CV_16U) {
+		raw_depth.convertTo(depth_map, CV_32FC1, 1.0 / 65535.0);
+	}
+	else if (raw_depth.depth() == CV_8U) {
+		raw_depth.convertTo(depth_map, CV_32FC1, 1.0 / 255.0);
+	}
+	else {
+		raw_depth.convertTo(depth_map, CV_32FC1);
+		double min_value = 0.0, max_value = 1.0;
+		minMaxLoc(depth_map, &min_value, &max_value);
+		if (max_value > min_value) {
+			depth_map = (depth_map - min_value) / (max_value - min_value);
+		}
+	}
+	if (depth_map.size() != img.size()) {
+		resize(depth_map, depth_map, img.size(), 0, 0, INTER_LINEAR);
+	}
+
+	const string layer_path = joinPath(*depth_dir, file_name + "-depth_layers.png");
+	depth_layer_map = imread(layer_path, IMREAD_GRAYSCALE);
+	if (depth_layer_map.empty()) {
+		Mat scaled;
+		depth_map.convertTo(scaled, CV_8UC1, DEPTH_LAYER_COUNT - 1);
+		depth_layer_map = scaled;
+	}
+	if (depth_layer_map.size() != img.size()) {
+		resize(depth_layer_map, depth_layer_map, img.size(), 0, 0, INTER_NEAREST);
+	}
+
+	const string confidence_path = joinPath(*depth_dir, file_name + "-depth_conf.png");
+	depth_confidence_map = imread(confidence_path, IMREAD_GRAYSCALE);
+	if (depth_confidence_map.empty()) {
+		depth_confidence_map = Mat(img.size(), CV_8UC1, Scalar(255));
+	}
+	if (depth_confidence_map.size() != img.size()) {
+		resize(depth_confidence_map, depth_confidence_map, img.size(), 0, 0, INTER_LINEAR);
+	}
+}
+
+bool ImageData::hasDepthMap() const {
+	loadDepthAssets();
+	return !depth_map.empty();
+}
+
+double ImageData::getDepthValue(const Point2& point) const {
+	loadDepthAssets();
+	if (depth_map.empty()) {
+		return 0.5;
+	}
+	const float x = std::min(std::max(point.x, 0.0f), (float)(depth_map.cols - 1));
+	const float y = std::min(std::max(point.y, 0.0f), (float)(depth_map.rows - 1));
+	const float value = getSubpix<float>(depth_map, Point2f(x, y));
+	if (!std::isfinite(value)) {
+		return 0.5;
+	}
+	return std::min(std::max((double)value, 0.0), 1.0);
+}
+
+int ImageData::getDepthLayer(const Point2& point) const {
+	loadDepthAssets();
+	if (depth_layer_map.empty()) {
+		return 0;
+	}
+	const int x = std::min(std::max((int)std::round(point.x), 0), depth_layer_map.cols - 1);
+	const int y = std::min(std::max((int)std::round(point.y), 0), depth_layer_map.rows - 1);
+	return (int)depth_layer_map.at<uchar>(y, x);
+}
+
+double ImageData::getDepthConfidence(const Point2& point) const {
+	loadDepthAssets();
+	if (depth_confidence_map.empty()) {
+		return 1.0;
+	}
+	const float x = std::min(std::max(point.x, 0.0f), (float)(depth_confidence_map.cols - 1));
+	const float y = std::min(std::max(point.y, 0.0f), (float)(depth_confidence_map.rows - 1));
+	const Vec<uchar, 1> value = getSubpix<uchar, 1>(depth_confidence_map, Point2f(x, y));
+	return std::min(std::max((double)value[0] / 255.0, 0.0), 1.0);
 }
 
 

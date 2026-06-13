@@ -96,8 +96,9 @@ def main() -> int:
 
     graphs_root = experiment_root / "graphs"
     sam_root = experiment_root / "sam"
+    depth_root = experiment_root / "depth"
     logs_root = experiment_root / "logs"
-    for path in (graphs_root, sam_root, logs_root, experiment_root / "0_results", experiment_root / "1_debugs"):
+    for path in (graphs_root, sam_root, depth_root, logs_root, experiment_root / "0_results", experiment_root / "1_debugs"):
         path.mkdir(parents=True, exist_ok=True)
 
     for row in rows:
@@ -105,6 +106,7 @@ def main() -> int:
         write_graph(graph_file, row["image_count"])
         row["graph_file"] = str(graph_file)
         row["sam_dir"] = str(sam_root / row["dataset"])
+        row["depth_dir"] = str(depth_root / row["dataset"])
 
     datasets_file = experiment_root / "datasets.txt"
     datasets_file.write_text("\n".join(row["dataset"] for row in rows) + "\n", encoding="utf-8")
@@ -113,7 +115,7 @@ def main() -> int:
     with manifest_csv.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["dataset", "category", "image_count", "image_files", "data_dir", "graph_file", "sam_dir"],
+            fieldnames=["dataset", "category", "image_count", "image_files", "data_dir", "graph_file", "sam_dir", "depth_dir"],
         )
         writer.writeheader()
         for row in rows:

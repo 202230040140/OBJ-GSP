@@ -1,6 +1,27 @@
 ﻿
 
 #include "NISwGSP_Stitching.h"
+#include "../Util/RuntimeConfig.h"
+
+#include <cmath>
+#include <sstream>
+#include <stdexcept>
+
+namespace {
+void validateTargetSize(const Size2& target_size) {
+	if (!std::isfinite(target_size.width) || !std::isfinite(target_size.height) ||
+		target_size.width <= 1 || target_size.height <= 1) {
+		throw std::runtime_error("Invalid target canvas size after mesh normalization.");
+	}
+	const double megapixels = ((double)target_size.width * (double)target_size.height) / 1000000.0;
+	if (megapixels > g_runtime_config.max_target_megapixels) {
+		std::ostringstream oss;
+		oss << "Target canvas too large: " << target_size.width << "x" << target_size.height
+			<< " (" << megapixels << " MP), limit=" << g_runtime_config.max_target_megapixels << " MP.";
+		throw std::runtime_error(oss.str());
+	}
+}
+}
 
 NISwGSP_Stitching::NISwGSP_Stitching(const MultiImages& _multi_images) : MeshOptimization(_multi_images) {
 
@@ -49,6 +70,7 @@ Mat NISwGSP_Stitching::solve(const BLENDING_METHODS& _blend_method, vector<vecto
 
 
 	Size2 target_size = normalizeVertices(original_vertices);
+	validateTargetSize(target_size);
 
 
 	Mat result = multi_images.textureMapping(original_vertices, target_size, _blend_method);
@@ -88,6 +110,7 @@ Mat NISwGSP_Stitching::solve_content(const BLENDING_METHODS& _blend_method, vect
 	original_vertices = getImageVerticesBySolving(triplets, b_vector);
 
 	Size2 target_size = normalizeVertices(original_vertices);
+	validateTargetSize(target_size);
 
 	Mat result = multi_images.textureMapping(original_vertices, target_size, _blend_method);
 
@@ -110,22 +133,10 @@ void NISwGSP_Stitching::writeImage(const Mat& _image, const string _blend_method
 	const MultiImages& multi_images = getMultiImages();
 	const Parameter& parameter = multi_images.parameter;
 	string file_name = parameter.file_name;
-
-	if (RUN_TYPE == 1) {
-		imwrite(parameter.result_dir + file_name + "-" +
-			"GES-GSP_" +
-			".png", _image);
+	if (_image.empty()) {
+		throw std::runtime_error("Refusing to write an empty stitching result.");
 	}
-	else if (RUN_TYPE == 2) {
-		imwrite(parameter.result_dir + file_name + "-" +
-			"Ours-SAM_" +
-			".png", _image);
-	}
-	else {
-		imwrite(parameter.result_dir + file_name + "-" +
-			"GSP_" +
-			".png", _image);
-	}
+	imwrite(parameter.result_dir + file_name + "-" + resultSuffix() + ".png", _image);
 
 }
 

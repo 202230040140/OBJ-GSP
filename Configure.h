@@ -47,7 +47,7 @@ using namespace cv::dnn;
 /******* you may adjust *******/
 /******************************/
 
-const int RUN_TYPE = 2; //0:GSP 1:GES-GSP 2: Our GES-GSP + SAM
+const int RUN_TYPE = 2; // Legacy default: 0:GSP 1:GES-GSP 2: Our GES-GSP + SAM
 const string TXT_NAME = "-STITCH-GRAPH.txt";
 
 
@@ -56,6 +56,11 @@ const int GRID_SIZE = 40;
 const int DOWN_SAMPLE_IMAGE_SIZE = 800 * 600;
 //Contour length/image shortest edge ratio
 const double CONTENT_LENGTH_THRESHOLD = 0.15;
+
+/*** depth-guided structure preserving ***/
+const int DEPTH_LAYER_COUNT = 4;
+const double DEPTH_CROSS_LAYER_WEIGHT = 0.35;
+const double DEPTH_MIN_WEIGHT = 0.20;
 
 //HED threshold
 const double HED_THRESHOLD = 0.5;

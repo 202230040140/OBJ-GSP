@@ -47,6 +47,8 @@ protected:
 		vector<pair<int, double> >& _b_vector) const;
 	void prepareContentPreservingTerm(vector<Triplet<double> >& _triplets,
 		vector<pair<int, double> >& _b_vector) const;
+	void prepareDepthPreservingTerm(vector<Triplet<double> >& _triplets,
+		vector<pair<int, double> >& _b_vector) const;
 
 	vector<vector<Point2> > getImageVerticesBySolving(vector<Triplet<double> >& _triplets,
 		const vector<pair<int, double> >& _b_vector) const;
@@ -59,6 +61,7 @@ private:
 	int getEdgesCount() const;
 	int getEdgeNeighborVerticesCount() const;
 	int getContentPreservingTermEquationCount() const;
+	int getDepthPreservingTermEquationCount() const;
 
 	const MultiImages* multi_images;
 
