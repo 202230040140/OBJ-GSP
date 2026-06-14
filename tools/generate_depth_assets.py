@@ -60,27 +60,71 @@ def depth_layers(depth: np.ndarray, layer_count: int) -> np.ndarray:
     return np.digitize(depth, bins, right=False).astype(np.uint8)
 
 
-def depth_confidence(depth: np.ndarray) -> np.ndarray:
-    grad_x = cv2.Sobel(depth, cv2.CV_32F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(depth, cv2.CV_32F, 0, 1, ksize=3)
+def gradient_magnitude(image: np.ndarray) -> np.ndarray:
+    image = image.astype(np.float32)
+    grad_x = cv2.Sobel(image, cv2.CV_32F, 1, 0, ksize=3)
+    grad_y = cv2.Sobel(image, cv2.CV_32F, 0, 1, ksize=3)
     magnitude = np.sqrt(grad_x * grad_x + grad_y * grad_y)
     if float(magnitude.max()) > 1e-6:
         magnitude = magnitude / float(magnitude.max())
+    return magnitude
+
+
+def depth_confidence(depth: np.ndarray) -> np.ndarray:
+    magnitude = gradient_magnitude(depth)
     confidence = np.clip(1.0 - magnitude, 0.0, 1.0)
     return (confidence * 255.0 + 0.5).astype(np.uint8)
 
 
-def save_depth_assets(image_path: Path, out_dir: Path, depth: np.ndarray, layer_count: int) -> None:
+def depth_edges(depth: np.ndarray) -> np.ndarray:
+    magnitude = gradient_magnitude(depth)
+    edge_u8 = (magnitude * 255.0 + 0.5).astype(np.uint8)
+    threshold, _ = cv2.threshold(edge_u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return (edge_u8 >= max(12.0, threshold)).astype(np.uint8) * 255
+
+
+def texture_edges(image_bgr: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    return cv2.Canny(blurred, 60, 160)
+
+
+def structure_edges(depth_edge_map: np.ndarray, texture_edge_map: np.ndarray, confidence: np.ndarray) -> np.ndarray:
+    confident_texture = cv2.bitwise_and(texture_edge_map, (confidence > 96).astype(np.uint8) * 255)
+    merged = cv2.bitwise_or(depth_edge_map, confident_texture)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    return cv2.morphologyEx(merged, cv2.MORPH_CLOSE, kernel)
+
+
+def load_existing_depth(depth_path: Path) -> Optional[np.ndarray]:
+    depth = cv2.imread(str(depth_path), cv2.IMREAD_UNCHANGED)
+    if depth is None:
+        return None
+    if depth.dtype == np.uint16:
+        return depth.astype(np.float32) / 65535.0
+    if depth.dtype == np.uint8:
+        return depth.astype(np.float32) / 255.0
+    return normalize_depth(depth.astype(np.float32))
+
+
+def save_depth_assets(image_path: Path, out_dir: Path, image_bgr: np.ndarray, depth: np.ndarray, layer_count: int) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = image_path.stem
     depth_u16 = (normalize_depth(depth) * 65535.0 + 0.5).astype(np.uint16)
-    layers = depth_layers(depth_u16.astype(np.float32) / 65535.0, layer_count)
-    confidence = depth_confidence(depth_u16.astype(np.float32) / 65535.0)
+    depth_norm = depth_u16.astype(np.float32) / 65535.0
+    layers = depth_layers(depth_norm, layer_count)
+    confidence = depth_confidence(depth_norm)
+    d_edges = depth_edges(depth_norm)
+    t_edges = texture_edges(image_bgr)
+    s_edges = structure_edges(d_edges, t_edges, confidence)
     vis = cv2.applyColorMap((depth_u16 / 257).astype(np.uint8), cv2.COLORMAP_TURBO)
 
     cv2.imwrite(str(out_dir / f"{stem}-depth.png"), depth_u16)
     cv2.imwrite(str(out_dir / f"{stem}-depth_layers.png"), layers)
     cv2.imwrite(str(out_dir / f"{stem}-depth_conf.png"), confidence)
+    cv2.imwrite(str(out_dir / f"{stem}-depth_edges.png"), d_edges)
+    cv2.imwrite(str(out_dir / f"{stem}-texture_edges.png"), t_edges)
+    cv2.imwrite(str(out_dir / f"{stem}-structure_edges.png"), s_edges)
     cv2.imwrite(str(out_dir / f"{stem}-depth_vis.png"), vis)
 
 
@@ -152,20 +196,20 @@ def outputs_exist(image_path: Path, out_dir: Path) -> bool:
     stem = image_path.stem
     return all(
         (out_dir / f"{stem}-{suffix}.png").exists()
-        for suffix in ("depth", "depth_layers", "depth_conf", "depth_vis")
+        for suffix in ("depth", "depth_layers", "depth_conf", "depth_edges", "texture_edges", "structure_edges", "depth_vis")
     )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate depth assets for StitchBench General datasets.")
     parser.add_argument("--data-root", default=r"D:\StitchBench\General")
-    parser.add_argument("--experiment-root", default="experiments/stitchbench_depth_gsp_phase1")
+    parser.add_argument("--experiment-root", default="experiments/phase1_depth_loss/depth_assets_generation")
     parser.add_argument("--datasets-file")
-    parser.add_argument("--depth-root")
+    parser.add_argument("--depth-root", default="assets/depthpro/stitchbench_general")
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--backend", choices=("auto", "depthpro", "midas-small", "proxy"), default="auto")
-    parser.add_argument("--depthpro-model", default="apple/DepthPro-hf", help="DepthPro model id or local model directory.")
-    parser.add_argument("--layers", type=int, default=4)
+    parser.add_argument("--backend", choices=("auto", "depthpro", "midas-small", "proxy"), default="depthpro")
+    parser.add_argument("--depthpro-model", default=r"D:\HFModels\DepthPro-hf", help="DepthPro model id or local model directory.")
+    parser.add_argument("--layers", type=int, default=6)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -198,12 +242,16 @@ def main() -> int:
                 image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
                 if image is None:
                     raise RuntimeError(f"Failed to read image: {image_path}")
-                if estimator is None:
+                existing_depth = None if args.force else load_existing_depth(out_dir / f"{image_path.stem}-depth.png")
+                if existing_depth is not None:
+                    depth = existing_depth
+                    active_backend = "cached-depth-derived"
+                elif estimator is None:
                     depth = proxy_depth(image)
                     active_backend = "proxy"
                 else:
                     depth = estimator(image)
-                save_depth_assets(image_path, out_dir, depth, args.layers)
+                save_depth_assets(image_path, out_dir, image, depth, args.layers)
                 status = "generated"
             print(f"[{dataset_index}/{len(datasets)}] {dataset} [{image_index}/{len(images)}] {image_path.name}: {status} ({active_backend})")
             rows.append(
@@ -216,12 +264,19 @@ def main() -> int:
                 }
             )
 
-    manifest_path = experiment_root / "depth_manifest.csv"
+    manifest_path = depth_root / "depth_manifest.csv"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with manifest_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["dataset", "image", "depth_dir", "backend", "status"])
         writer.writeheader()
         writer.writerows(rows)
+    if experiment_root.resolve() != depth_root.resolve():
+        experiment_root.mkdir(parents=True, exist_ok=True)
+        mirror_manifest = experiment_root / "depth_manifest.csv"
+        with mirror_manifest.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["dataset", "image", "depth_dir", "backend", "status"])
+            writer.writeheader()
+            writer.writerows(rows)
 
     print(f"Wrote depth manifest: {manifest_path}")
     return 0

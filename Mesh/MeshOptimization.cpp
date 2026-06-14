@@ -9,6 +9,7 @@
 #include "MeshOptimization.h"
 #include "../Util/RuntimeConfig.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -439,6 +440,8 @@ void MeshOptimization::prepareDepthPreservingTerm(vector<Triplet<double> >& _tri
 			const int ind_e2 = edges[j].indices[1];
 			const Point2& src = vertices[ind_e1];
 			const Point2& dst = vertices[ind_e2];
+			const Point2 mid((src.x + dst.x) * 0.5f, (src.y + dst.y) * 0.5f);
+			const Point2 delta = dst - src;
 
 			const double d1 = image_data.getDepthValue(src);
 			const double d2 = image_data.getDepthValue(dst);
@@ -448,10 +451,47 @@ void MeshOptimization::prepareDepthPreservingTerm(vector<Triplet<double> >& _tri
 			const double layer_weight = (layer1 == layer2) ? 1.0 : g_runtime_config.depth_cross_layer_weight;
 			const double c1 = image_data.getDepthConfidence(src);
 			const double c2 = image_data.getDepthConfidence(dst);
-			const double confidence = std::max(g_runtime_config.depth_confidence_floor, (c1 + c2) * 0.5);
-			const double depth_weight = std::max(g_runtime_config.depth_min_weight, layer_weight * continuity * confidence);
+			const double cm = image_data.getDepthConfidence(mid);
+			const double confidence = std::max(g_runtime_config.depth_confidence_floor, (c1 + c2 + cm) / 3.0);
+			const double depth_edge = (image_data.getDepthEdgeStrength(src) +
+				image_data.getDepthEdgeStrength(dst) +
+				image_data.getDepthEdgeStrength(mid)) / 3.0;
+			const double texture_edge = (image_data.getTextureEdgeStrength(src) +
+				image_data.getTextureEdgeStrength(dst) +
+				image_data.getTextureEdgeStrength(mid)) / 3.0;
+			const double structure_edge = (image_data.getStructureEdgeStrength(src) +
+				image_data.getStructureEdgeStrength(dst) +
+				image_data.getStructureEdgeStrength(mid)) / 3.0;
+			const double structure_boost = 1.0 +
+				g_runtime_config.depth_structure_weight * structure_edge +
+				g_runtime_config.depth_texture_weight * texture_edge +
+				g_runtime_config.depth_edge_weight * depth_edge;
+			const double texture_only_noise = std::max(0.0, texture_edge - depth_edge);
+			const double texture_noise_penalty = std::max(0.25, 1.0 - g_runtime_config.depth_texture_noise_weight * texture_only_noise);
+			const double length = std::max(1e-6, (double)norm(delta));
+			const Point2 q1(src.x * 0.75f + dst.x * 0.25f, src.y * 0.75f + dst.y * 0.25f);
+			const Point2 q3(src.x * 0.25f + dst.x * 0.75f, src.y * 0.25f + dst.y * 0.75f);
+			const double d_q1 = image_data.getDepthValue(q1);
+			const double d_q3 = image_data.getDepthValue(q3);
+			const double linear_q1 = d1 * 0.75 + d2 * 0.25;
+			const double linear_q3 = d1 * 0.25 + d2 * 0.75;
+			const double normal_scale = std::min(8.0, std::max(2.0, length * 0.25));
+			const Point2 normal((float)(-(dst.y - src.y) / length * normal_scale),
+				(float)((dst.x - src.x) / length * normal_scale));
+			const Point2 side_a(mid.x + normal.x, mid.y + normal.y);
+			const Point2 side_b(mid.x - normal.x, mid.y - normal.y);
+			const double d_mid = (d1 + d2) * 0.5;
+			// Penalize local depth that is not well explained by a small planar patch.
+			const double local_depth_error =
+				(std::abs(d_q1 - linear_q1) +
+					std::abs(d_q3 - linear_q3) +
+					std::abs(image_data.getDepthValue(side_a) - d_mid) +
+					std::abs(image_data.getDepthValue(side_b) - d_mid)) / 4.0;
+			const double planarity = std::exp(-local_depth_error / tau);
+			const double planarity_penalty = std::max(0.35, 1.0 - g_runtime_config.depth_planarity_weight * (1.0 - planarity));
+			const double raw_depth_weight = layer_weight * continuity * confidence * structure_boost * texture_noise_penalty * planarity_penalty;
+			const double depth_weight = std::min(3.0, std::max(g_runtime_config.depth_min_weight, raw_depth_weight));
 			const double weight = content_preserving_weight * depth_weight;
-			const Point2 delta = dst - src;
 
 			for (int dim = 0; dim < DIMENSION_2D; ++dim) {
 				const int equation = content_preserving_equation.first + eq_count + dim;

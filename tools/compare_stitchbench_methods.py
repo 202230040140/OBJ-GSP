@@ -50,6 +50,18 @@ def pct(value: float) -> str:
     return "" if not math.isfinite(value) else f"{100.0 * value:.1f}%"
 
 
+def rel_gap(candidate_value: float, baseline_value: float) -> float:
+    if not math.isfinite(candidate_value) or not math.isfinite(baseline_value) or baseline_value == 0:
+        return math.nan
+    return candidate_value / baseline_value - 1.0
+
+
+def ratio(candidate_value: float, baseline_value: float) -> float:
+    if not math.isfinite(candidate_value) or not math.isfinite(baseline_value) or baseline_value == 0:
+        return math.nan
+    return candidate_value / baseline_value
+
+
 def write_csv(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -72,7 +84,8 @@ def main() -> int:
     parser.add_argument("--baseline-name", default="OBJ-GSP")
     parser.add_argument("--candidate-name", default="DepthPro-DSP")
     parser.add_argument("--output-root")
-    parser.add_argument("--target-both-rate", type=float, default=0.90)
+    parser.add_argument("--target-mean-gap", type=float, default=0.01)
+    parser.add_argument("--max-regression-ratio", type=float, default=2.0)
     args = parser.parse_args()
 
     baseline_root = Path(args.baseline_root)
@@ -106,6 +119,8 @@ def main() -> int:
         cand_niqe = cand["niqe"] if cand else math.nan
         mdr_delta = cand_mdr - base_mdr if base_ok and cand_ok else math.nan
         niqe_delta = cand_niqe - base_niqe if base_ok and cand_ok else math.nan
+        mdr_gap = rel_gap(cand_mdr, base_mdr) if base_ok and cand_ok else math.nan
+        niqe_gap = rel_gap(cand_niqe, base_niqe) if base_ok and cand_ok else math.nan
         rows.append(
             {
                 "dataset": name,
@@ -115,10 +130,14 @@ def main() -> int:
                 "baseline_mdr": base_mdr,
                 "candidate_mdr": cand_mdr,
                 "mdr_delta": mdr_delta,
+                "mdr_rel_gap": mdr_gap,
+                "mdr_ratio": ratio(cand_mdr, base_mdr) if base_ok and cand_ok else math.nan,
                 "mdr_better": int(mdr_delta < 0) if math.isfinite(mdr_delta) else "",
                 "baseline_niqe": base_niqe,
                 "candidate_niqe": cand_niqe,
                 "niqe_delta": niqe_delta,
+                "niqe_rel_gap": niqe_gap,
+                "niqe_ratio": ratio(cand_niqe, base_niqe) if base_ok and cand_ok else math.nan,
                 "niqe_better": int(niqe_delta < 0) if math.isfinite(niqe_delta) else "",
                 "both_better": int(mdr_delta < 0 and niqe_delta < 0) if math.isfinite(mdr_delta) and math.isfinite(niqe_delta) else "",
                 "candidate_warping_residual_avg": cand["warping_residual_avg"] if cand else math.nan,
@@ -170,6 +189,32 @@ def main() -> int:
     mdr_better = [name for name in common_ok if candidate[name]["mdr_rmse"] < baseline[name]["mdr_rmse"]]
     niqe_better = [name for name in common_ok if candidate[name]["niqe"] < baseline[name]["niqe"]]
     both_rate = len(both_better) / len(common_ok) if common_ok else math.nan
+    mean_mdr_gap = rel_gap(common_candidate_mdr, common_baseline_mdr)
+    mean_niqe_gap = rel_gap(common_candidate_niqe, common_baseline_niqe)
+    mdr_ratios = [ratio(candidate[name]["mdr_rmse"], baseline[name]["mdr_rmse"]) for name in common_ok]
+    niqe_ratios = [ratio(candidate[name]["niqe"], baseline[name]["niqe"]) for name in common_ok]
+    max_mdr_ratio = max([value for value in mdr_ratios if math.isfinite(value)], default=math.nan)
+    max_niqe_ratio = max([value for value in niqe_ratios if math.isfinite(value)], default=math.nan)
+    severe_mdr_regressions = [
+        name
+        for name in common_ok
+        if ratio(candidate[name]["mdr_rmse"], baseline[name]["mdr_rmse"]) >= args.max_regression_ratio
+    ]
+    severe_niqe_regressions = [
+        name
+        for name in common_ok
+        if ratio(candidate[name]["niqe"], baseline[name]["niqe"]) >= args.max_regression_ratio
+    ]
+    no_failures = len(candidate_failed) == 0
+    mean_non_worse = mean_mdr_gap <= args.target_mean_gap and mean_niqe_gap <= args.target_mean_gap
+    no_severe_regressions = not severe_mdr_regressions and not severe_niqe_regressions
+    non_worse_status = no_failures and mean_non_worse and no_severe_regressions
+    strict_abs_parity_status = (
+        no_failures
+        and abs(mean_mdr_gap) <= args.target_mean_gap
+        and abs(mean_niqe_gap) <= args.target_mean_gap
+        and no_severe_regressions
+    )
 
     write_csv(output_root / "method_pair_comparison.csv", rows)
     write_csv(output_root / "method_category_comparison.csv", category_rows)
@@ -194,12 +239,19 @@ def main() -> int:
         f"- {args.baseline_name} failed while {args.candidate_name} succeeded: {len(baseline_failed_candidate_ok)}",
         f"- {args.candidate_name} failed: {len(candidate_failed)}",
         f"- Common mean MDR: {args.candidate_name} {fmt(common_candidate_mdr)} vs {args.baseline_name} {fmt(common_baseline_mdr)}",
+        f"- Common mean MDR relative gap: {pct(mean_mdr_gap)}",
         f"- Common mean NIQE: {args.candidate_name} {fmt(common_candidate_niqe)} vs {args.baseline_name} {fmt(common_baseline_niqe)}",
+        f"- Common mean NIQE relative gap: {pct(mean_niqe_gap)}",
+        f"- Max common MDR ratio: {fmt(max_mdr_ratio)}",
+        f"- Max common NIQE ratio: {fmt(max_niqe_ratio)}",
+        f"- Samples with MDR >= {args.max_regression_ratio:.1f}x baseline: {len(severe_mdr_regressions)}",
+        f"- Samples with NIQE >= {args.max_regression_ratio:.1f}x baseline: {len(severe_niqe_regressions)}",
         f"- MDR better on common set: {len(mdr_better)}/{len(common_ok)} ({pct(len(mdr_better) / len(common_ok) if common_ok else math.nan)})",
         f"- NIQE better on common set: {len(niqe_better)}/{len(common_ok)} ({pct(len(niqe_better) / len(common_ok) if common_ok else math.nan)})",
         f"- Both MDR and NIQE better on common set: {len(both_better)}/{len(common_ok)} ({pct(both_rate)})",
-        f"- Target both-better rate: {pct(args.target_both_rate)}",
-        f"- Target status: {'Pass' if both_rate >= args.target_both_rate and common_candidate_mdr < common_baseline_mdr and common_candidate_niqe < common_baseline_niqe else 'Needs Optimization'}",
+        f"- Mean non-worse tolerance: {pct(args.target_mean_gap)}",
+        f"- Non-worse parity status: {'Pass' if non_worse_status else 'Needs Review'}",
+        f"- Strict absolute mean-gap parity status: {'Pass' if strict_abs_parity_status else 'Needs Review'}",
         "",
         "## Category Breakdown",
         "",

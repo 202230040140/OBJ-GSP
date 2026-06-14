@@ -20,6 +20,7 @@ __pycache__/
 
 # Generated experiment outputs
 experiments/
+assets/depthpro/
 input-data/0_results/
 input-data/1_debugs/
 0-original.png
@@ -32,7 +33,11 @@ reproduce-*.log
 # Large local model/data artifacts
 sam_vit_*.pth
 sam_ckpt/
+weights/**/*.pth
+weights/**/*.safetensors
+weights/**/*.bin
+weights/depthpro/DepthPro-hf/
 
-# Local paper copy used during reproduction notes
+# Local reference copies used during reproduction notes
 Object-level Geometric Structure Preserving for Natural Image Stitching.pdf
-StitchBench General 上复现 OBJ-GSP Ours 实验计划.md
+docs/references/*.pdf

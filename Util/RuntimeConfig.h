@@ -14,6 +14,11 @@ struct RuntimeConfig {
 	double depth_cross_layer_weight = 0.35;
 	double depth_min_weight = 0.20;
 	double depth_confidence_floor = 1.0;
+	double depth_structure_weight = 1.0;
+	double depth_texture_weight = 0.35;
+	double depth_edge_weight = 0.50;
+	double depth_texture_noise_weight = 0.35;
+	double depth_planarity_weight = 0.0;
 	double max_target_megapixels = 80.0;
 };
 

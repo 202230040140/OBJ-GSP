@@ -142,10 +142,10 @@ def generate_for_dataset(dataset: str, data_root: Path, sam_root: Path, mask_gen
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate SAM contour assets for OBJ-GSP batch reproduction.")
     parser.add_argument("--data-root", default=r"D:\StitchBench\General")
-    parser.add_argument("--experiment-root", default="experiments/stitchbench_general_ours")
+    parser.add_argument("--experiment-root", default="experiments/phase1_depth_loss/baselines/obj_gsp_sam_general")
     parser.add_argument("--datasets-file")
     parser.add_argument("--dataset", action="append")
-    parser.add_argument("--checkpoint", default="sam_vit_h_4b8939.pth")
+    parser.add_argument("--checkpoint", default="weights/sam/sam_vit_h_4b8939.pth")
     parser.add_argument("--model-type", default="vit_h")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--min-mask-region-area", type=int, default=10000)

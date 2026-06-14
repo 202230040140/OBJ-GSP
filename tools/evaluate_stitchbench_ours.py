@@ -115,7 +115,7 @@ def suffix_for_method(method: str) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate OBJ-GSP StitchBench General results.")
-    parser.add_argument("--experiment-root", default="experiments/stitchbench_general_ours")
+    parser.add_argument("--experiment-root", default="experiments/phase1_depth_loss/baselines/obj_gsp_sam_general")
     parser.add_argument("--datasets-file")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--skip-niqe", action="store_true")

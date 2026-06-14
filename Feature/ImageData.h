@@ -57,6 +57,9 @@ public:
 	double getDepthValue(const Point2& point) const;
 	int getDepthLayer(const Point2& point) const;
 	double getDepthConfidence(const Point2& point) const;
+	double getDepthEdgeStrength(const Point2& point) const;
+	double getTextureEdgeStrength(const Point2& point) const;
+	double getStructureEdgeStrength(const Point2& point) const;
 	const vector<LineData>& getLines() const;
 	const vector<Point2>& getFeaturePoints() const;
 	const vector<FeatureDescriptor>& getFeatureDescriptors() const;
@@ -76,6 +79,9 @@ private:
 	mutable Mat depth_map;
 	mutable Mat depth_layer_map;
 	mutable Mat depth_confidence_map;
+	mutable Mat depth_edge_map;
+	mutable Mat texture_edge_map;
+	mutable Mat structure_edge_map;
 	mutable vector<LineData> img_lines;
 	mutable vector<Point2> feature_points;
 	mutable vector<FeatureDescriptor> feature_descriptors;

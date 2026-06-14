@@ -57,6 +57,11 @@ void printUsage() {
 		<< "  --depth-cross-layer-weight VALUE  Weight for edges crossing depth layers\n"
 		<< "  --depth-min-weight VALUE  Minimum depth edge weight\n"
 		<< "  --depth-confidence-floor VALUE  Confidence floor in [0,1]\n"
+		<< "  --depth-structure-weight VALUE  Boost from fused depth/texture structure edges\n"
+		<< "  --depth-texture-weight VALUE  Boost from texture edges\n"
+		<< "  --depth-edge-weight VALUE  Boost from depth discontinuity edges\n"
+		<< "  --depth-texture-noise-weight VALUE  Penalty for texture-only noisy edges\n"
+		<< "  --depth-planarity-weight VALUE  Penalty for locally non-planar/noisy depth\n"
 		<< "  --max-target-megapixels VALUE  Abort if output canvas exceeds this size\n"
 		<< "  --datasets-file PATH   Text file with one dataset name per line\n"
 		<< "  --dataset NAME         Add one dataset name\n";
@@ -106,6 +111,21 @@ int main(int argc, const char* argv[]) {
 			else if (arg.rfind("--depth-confidence-floor", 0) == 0) {
 				g_runtime_config.depth_confidence_floor = stod(getArgValue(i, argc, argv, arg));
 			}
+			else if (arg.rfind("--depth-structure-weight", 0) == 0) {
+				g_runtime_config.depth_structure_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-texture-weight", 0) == 0) {
+				g_runtime_config.depth_texture_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-edge-weight", 0) == 0) {
+				g_runtime_config.depth_edge_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-texture-noise-weight", 0) == 0) {
+				g_runtime_config.depth_texture_noise_weight = stod(getArgValue(i, argc, argv, arg));
+			}
+			else if (arg.rfind("--depth-planarity-weight", 0) == 0) {
+				g_runtime_config.depth_planarity_weight = stod(getArgValue(i, argc, argv, arg));
+			}
 			else if (arg.rfind("--max-target-megapixels", 0) == 0) {
 				g_runtime_config.max_target_megapixels = stod(getArgValue(i, argc, argv, arg));
 			}
@@ -146,8 +166,14 @@ int main(int argc, const char* argv[]) {
 		g_runtime_config.depth_cross_layer_weight < 0 ||
 		g_runtime_config.depth_min_weight < 0 ||
 		g_runtime_config.depth_confidence_floor < 0 ||
+		g_runtime_config.depth_structure_weight < 0 ||
+		g_runtime_config.depth_texture_weight < 0 ||
+		g_runtime_config.depth_edge_weight < 0 ||
+		g_runtime_config.depth_texture_noise_weight < 0 ||
+		g_runtime_config.depth_planarity_weight < 0 ||
+		g_runtime_config.depth_planarity_weight > 1 ||
 		g_runtime_config.depth_confidence_floor > 1) {
-		cerr << "Depth/content weights must be non-negative, and --depth-confidence-floor must be in [0,1]." << endl;
+		cerr << "Depth/content weights must be non-negative, --depth-confidence-floor must be in [0,1], and --depth-planarity-weight must be in [0,1]." << endl;
 		return 2;
 	}
 	if (g_runtime_config.max_target_megapixels <= 0) {
@@ -171,6 +197,11 @@ int main(int argc, const char* argv[]) {
 	cout << "depth_cross_layer_weight = " << g_runtime_config.depth_cross_layer_weight << endl;
 	cout << "depth_min_weight = " << g_runtime_config.depth_min_weight << endl;
 	cout << "depth_confidence_floor = " << g_runtime_config.depth_confidence_floor << endl;
+	cout << "depth_structure_weight = " << g_runtime_config.depth_structure_weight << endl;
+	cout << "depth_texture_weight = " << g_runtime_config.depth_texture_weight << endl;
+	cout << "depth_edge_weight = " << g_runtime_config.depth_edge_weight << endl;
+	cout << "depth_texture_noise_weight = " << g_runtime_config.depth_texture_noise_weight << endl;
+	cout << "depth_planarity_weight = " << g_runtime_config.depth_planarity_weight << endl;
 	cout << "max_target_megapixels = " << g_runtime_config.max_target_megapixels << endl;
 
 	time_t start = clock();

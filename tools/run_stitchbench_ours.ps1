@@ -1,18 +1,23 @@
 param(
     [string]$DataRoot = "D:\StitchBench\General",
-    [string]$ExperimentRoot = "experiments\stitchbench_general_ours",
+    [string]$ExperimentRoot = "experiments\phase1_depth_loss\baselines\obj_gsp_sam_general",
     [string]$Python = "C:\Users\22499\.venvs\obj-gsp-sam\Scripts\python.exe",
-    [string]$Checkpoint = "sam_vit_h_4b8939.pth",
+    [string]$Checkpoint = "weights\sam\sam_vit_h_4b8939.pth",
     [string]$Method = "obj-gsp",
-    [string]$DepthRoot = "",
-    [string]$DepthBackend = "auto",
-    [string]$DepthProModel = "apple/DepthPro-hf",
+    [string]$DepthRoot = "assets\depthpro\stitchbench_general",
+    [string]$DepthBackend = "depthpro",
+    [string]$DepthProModel = "D:\HFModels\DepthPro-hf",
     [string]$DepthPreset = "",
     [double]$ContentWeight = 1.5,
     [double]$DepthTau = 0.12,
     [double]$DepthCrossLayerWeight = 0.35,
     [double]$DepthMinWeight = 0.20,
     [double]$DepthConfidenceFloor = 1.0,
+    [double]$DepthStructureWeight = 1.0,
+    [double]$DepthTextureWeight = 0.35,
+    [double]$DepthEdgeWeight = 0.50,
+    [double]$DepthTextureNoiseWeight = 0.35,
+    [double]$DepthPlanarityWeight = 0.0,
     [switch]$AutoRobustFallback,
     [double]$RobustFallbackWarpThreshold = 30.0,
     [double]$MaxTargetMegapixels = 80.0,
@@ -107,6 +112,7 @@ if (-not [string]::IsNullOrWhiteSpace($DepthPreset)) {
     Write-Host "Depth preset: $DepthPreset"
 }
 Write-Host "Depth/content params: content=$ContentWeight tau=$DepthTau cross=$DepthCrossLayerWeight min=$DepthMinWeight conf_floor=$DepthConfidenceFloor"
+Write-Host "Depth structure params: structure=$DepthStructureWeight texture=$DepthTextureWeight edge=$DepthEdgeWeight texture_noise=$DepthTextureNoiseWeight planarity=$DepthPlanarityWeight"
 
 $prepareArgs = @(
     "tools\prepare_stitchbench_general.py",
@@ -210,6 +216,11 @@ if (-not $SkipRun) {
             "--depth-cross-layer-weight", $DepthCrossLayerWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
             "--depth-min-weight", $DepthMinWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
             "--depth-confidence-floor", $DepthConfidenceFloor.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+            "--depth-structure-weight", $DepthStructureWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+            "--depth-texture-weight", $DepthTextureWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+            "--depth-edge-weight", $DepthEdgeWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+            "--depth-texture-noise-weight", $DepthTextureNoiseWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+            "--depth-planarity-weight", $DepthPlanarityWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
             "--max-target-megapixels", $MaxTargetMegapixels.ToString([System.Globalization.CultureInfo]::InvariantCulture),
             "--dataset", $name
         )
@@ -267,6 +278,11 @@ if (-not $SkipRun) {
                     "--depth-cross-layer-weight", "0.35",
                     "--depth-min-weight", "0.20",
                     "--depth-confidence-floor", "1.0",
+                    "--depth-structure-weight", $DepthStructureWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+                    "--depth-texture-weight", $DepthTextureWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+                    "--depth-edge-weight", $DepthEdgeWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+                    "--depth-texture-noise-weight", $DepthTextureNoiseWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
+                    "--depth-planarity-weight", $DepthPlanarityWeight.ToString([System.Globalization.CultureInfo]::InvariantCulture),
                     "--max-target-megapixels", $MaxTargetMegapixels.ToString([System.Globalization.CultureInfo]::InvariantCulture),
                     "--dataset", $name
                 )

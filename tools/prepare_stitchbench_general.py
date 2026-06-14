@@ -73,7 +73,7 @@ def discover(data_root: Path, selected: Optional[set[str]]) -> list[dict]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Prepare StitchBench General metadata and OBJ-GSP graph files.")
     parser.add_argument("--data-root", default=r"D:\StitchBench\General")
-    parser.add_argument("--experiment-root", default="experiments/stitchbench_general_ours")
+    parser.add_argument("--experiment-root", default="experiments/phase1_depth_loss/baselines/obj_gsp_sam_general")
     parser.add_argument("--dataset", action="append", help="Limit to one dataset; can be repeated.")
     parser.add_argument("--expected-count", type=int, default=100)
     parser.add_argument("--allow-count-mismatch", action="store_true")

@@ -113,6 +113,9 @@ void ImageData::loadDepthAssets() const {
 		depth_map = Mat(img.size(), CV_32FC1, Scalar(0.5));
 		depth_layer_map = Mat(img.size(), CV_8UC1, Scalar(0));
 		depth_confidence_map = Mat(img.size(), CV_8UC1, Scalar(255));
+		depth_edge_map = Mat(img.size(), CV_8UC1, Scalar(0));
+		texture_edge_map = Mat(img.size(), CV_8UC1, Scalar(0));
+		structure_edge_map = Mat(img.size(), CV_8UC1, Scalar(0));
 		return;
 	}
 
@@ -123,6 +126,9 @@ void ImageData::loadDepthAssets() const {
 		depth_map = Mat(img.size(), CV_32FC1, Scalar(0.5));
 		depth_layer_map = Mat(img.size(), CV_8UC1, Scalar(0));
 		depth_confidence_map = Mat(img.size(), CV_8UC1, Scalar(255));
+		depth_edge_map = Mat(img.size(), CV_8UC1, Scalar(0));
+		texture_edge_map = Mat(img.size(), CV_8UC1, Scalar(0));
+		structure_edge_map = Mat(img.size(), CV_8UC1, Scalar(0));
 		return;
 	}
 
@@ -166,6 +172,21 @@ void ImageData::loadDepthAssets() const {
 	if (depth_confidence_map.size() != img.size()) {
 		resize(depth_confidence_map, depth_confidence_map, img.size(), 0, 0, INTER_LINEAR);
 	}
+
+	const auto load_edge_asset = [&](const string& suffix) -> Mat {
+		const string path = joinPath(*depth_dir, file_name + suffix);
+		Mat edge = imread(path, IMREAD_GRAYSCALE);
+		if (edge.empty()) {
+			return Mat(img.size(), CV_8UC1, Scalar(0));
+		}
+		if (edge.size() != img.size()) {
+			resize(edge, edge, img.size(), 0, 0, INTER_LINEAR);
+		}
+		return edge;
+	};
+	depth_edge_map = load_edge_asset("-depth_edges.png");
+	texture_edge_map = load_edge_asset("-texture_edges.png");
+	structure_edge_map = load_edge_asset("-structure_edges.png");
 }
 
 bool ImageData::hasDepthMap() const {
@@ -206,6 +227,31 @@ double ImageData::getDepthConfidence(const Point2& point) const {
 	const float y = std::min(std::max(point.y, 0.0f), (float)(depth_confidence_map.rows - 1));
 	const Vec<uchar, 1> value = getSubpix<uchar, 1>(depth_confidence_map, Point2f(x, y));
 	return std::min(std::max((double)value[0] / 255.0, 0.0), 1.0);
+}
+
+static double getEdgeStrengthAt(const Mat& edge_map, const Point2& point) {
+	if (edge_map.empty()) {
+		return 0.0;
+	}
+	const float x = std::min(std::max(point.x, 0.0f), (float)(edge_map.cols - 1));
+	const float y = std::min(std::max(point.y, 0.0f), (float)(edge_map.rows - 1));
+	const Vec<uchar, 1> value = getSubpix<uchar, 1>(edge_map, Point2f(x, y));
+	return std::min(std::max((double)value[0] / 255.0, 0.0), 1.0);
+}
+
+double ImageData::getDepthEdgeStrength(const Point2& point) const {
+	loadDepthAssets();
+	return getEdgeStrengthAt(depth_edge_map, point);
+}
+
+double ImageData::getTextureEdgeStrength(const Point2& point) const {
+	loadDepthAssets();
+	return getEdgeStrengthAt(texture_edge_map, point);
+}
+
+double ImageData::getStructureEdgeStrength(const Point2& point) const {
+	loadDepthAssets();
+	return getEdgeStrengthAt(structure_edge_map, point);
 }
 
 
