@@ -617,9 +617,34 @@ vector<vector<Point2> > MeshOptimization::getImageVerticesBySolving(vector<Tripl
 	timer.start();
 	cout << "A = [" << equations << ", " << getVerticesCount() << "]" << endl;
 #endif
-	A.setFromTriplets(_triplets.begin(), _triplets.end());
+	vector<Triplet<double> > valid_triplets;
+	valid_triplets.reserve(_triplets.size());
+	int skipped_triplets = 0;
+	for (int i = 0; i < _triplets.size(); ++i) {
+		const Triplet<double>& item = _triplets[i];
+		if (item.row() < 0 || item.row() >= equations ||
+			item.col() < 0 || item.col() >= getVerticesCount() ||
+			!std::isfinite(item.value())) {
+			++skipped_triplets;
+			continue;
+		}
+		valid_triplets.emplace_back(item);
+	}
+	if (skipped_triplets > 0) {
+		cout << "Skipped invalid sparse triplets: " << skipped_triplets << endl;
+	}
+	A.setFromTriplets(valid_triplets.begin(), valid_triplets.end());
+	int skipped_b_values = 0;
 	for (int i = 0; i < _b_vector.size(); ++i) {
+		if (_b_vector[i].first < 0 || _b_vector[i].first >= equations ||
+			!std::isfinite(_b_vector[i].second)) {
+			++skipped_b_values;
+			continue;
+		}
 		b[_b_vector[i].first] = _b_vector[i].second;
+	}
+	if (skipped_b_values > 0) {
+		cout << "Skipped invalid b values: " << skipped_b_values << endl;
 	}
 #ifndef DP_NO_LOG
 	timer.end("Initial A matrix");

@@ -46,5 +46,17 @@ int Mesh2D::getGridIndexOfPoint(const Point_<T>& _p) const {
 	Point2i grid_p(_p.x / lw, _p.y / lh);
 	grid_p.x = grid_p.x - (grid_p.x == nw);
 	grid_p.y = grid_p.y - (grid_p.y == nh);
+	if (grid_p.x < 0) {
+		grid_p.x = 0;
+	}
+	else if (grid_p.x >= nw) {
+		grid_p.x = nw - 1;
+	}
+	if (grid_p.y < 0) {
+		grid_p.y = 0;
+	}
+	else if (grid_p.y >= nh) {
+		grid_p.y = nh - 1;
+	}
 	return grid_p.x + grid_p.y * nw;
 }
