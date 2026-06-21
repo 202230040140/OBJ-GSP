@@ -1,10 +1,10 @@
 param(
     [string]$DataRoot = "D:\StitchBench\General",
-    [string]$ExperimentRoot = "experiments\phase1_depth_loss\baselines\obj_gsp_sam_general",
+    [string]$ExperimentRoot = "D:\StitchBench_Result\obj_gsp",
     [string]$Python = "C:\Users\22499\.venvs\obj-gsp-sam\Scripts\python.exe",
     [string]$Checkpoint = "weights\sam\sam_vit_h_4b8939.pth",
     [string]$Method = "obj-gsp",
-    [string]$DepthRoot = "assets\depthpro\stitchbench_general",
+    [string]$DepthRoot = "D:\StitchBench_Result\_shared\depthpro\stitchbench_general",
     [string]$DepthBackend = "depthpro",
     [string]$DepthProModel = "D:\HFModels\DepthPro-hf",
     [string]$DepthPreset = "",

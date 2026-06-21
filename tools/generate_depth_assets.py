@@ -205,7 +205,7 @@ def main() -> int:
     parser.add_argument("--data-root", default=r"D:\StitchBench\General")
     parser.add_argument("--experiment-root", default="experiments/phase1_depth_loss/depth_assets_generation")
     parser.add_argument("--datasets-file")
-    parser.add_argument("--depth-root", default="assets/depthpro/stitchbench_general")
+    parser.add_argument("--depth-root", default=r"D:\StitchBench_Result\_shared\depthpro\stitchbench_general")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--backend", choices=("auto", "depthpro", "midas-small", "proxy"), default="depthpro")
     parser.add_argument("--depthpro-model", default=r"D:\HFModels\DepthPro-hf", help="DepthPro model id or local model directory.")
